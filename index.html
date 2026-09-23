@@ -1,111 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Secure Multi-Upload Form</title>
-    <!-- Load the official, verified Supabase Library Bundle -->
-    <script src="https://unpkg.com"></script>
-    <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f4f9; margin: 0; }
-        form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 320px; display: flex; flex-direction: column; }
-        h3 { margin-top: 0; color: #333; text-align: center; margin-bottom: 20px; }
-        label { font-size: 13px; color: #333; margin-bottom: 5px; font-weight: bold; display: block; }
-        input { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-        .file-box { margin-bottom: 15px; padding: 5px 0; }
-        button { background: #24292e; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; }
-        button:hover { background: #333; }
-        button:disabled { background: #ccc; cursor: not-allowed; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supabase Auth</title>
+  <!-- Supabase client bundle library injection -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body style="font-family: system-ui, sans-serif; padding: 2rem; background: #0f172a; color: #f8fafc;">
+  
+  <main>
+    <h2>Supabase App Dashboard</h2>
+    <p>Status: Initializing client verification workflow...</p>
+  </main>
 
-    <form id="leadForm">
-        <h3>Submit Details & Files</h3>
-        
-        <input type="text" id="username" placeholder="Your Name" required>
-        <input type="email" id="useremail" placeholder="Your Email" required>
-        
-        <label for="userfiles">Choose Files to Attach:</label>
-        <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
-        
-        <button type="submit" id="submitBtn">Submit Data</button>
-    </form>
+  <script>
+    // Validated parameters avoiding token concatenation errors
+    const SUPABASE_URL = "https://brldoaeffbajoitxohej.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
 
-    <script>
-        const SUPABASE_URL = "https://supabase.co";
-       // const SUPABASE_URL = "https://brldoaeffbajoitxohej.supabase.co";
-        const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
-        // ===================================
+    // Initialize the authenticated cloud infrastructure client
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log("Supabase Client online connected to:", SUPABASE_URL);
 
-        // Initialize Supabase Client securely
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Auth example interaction logic
+    async function signUp(email, password) {
+      const { data, error } = await _supabase.auth.signUp({ email, password });
+      if (error) console.error("Sign up error:", error.message);
+      else console.log("Sign up success:", data.user);
+    }
 
-        document.getElementById('leadForm').addEventListener('submit', async function(e) {
-            e.preventDefault(); 
-
-            const btn = document.getElementById('submitBtn');
-            btn.innerText = "Processing...";
-            btn.disabled = true;
-
-            const name = document.getElementById('username').value;
-            const email = document.getElementById('useremail').value;
-            const fileInput = document.getElementById('userfiles');
-            const filesList = fileInput.files;
-
-            // Generate clean prefix tracking string
-            const emailPrefix = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-            alert("Step 1: Commencing multi-file upload using official SDK...");
-
-            try {
-                const publicUrls = [];
-
-                // 1. Upload files into your new public storage bucket one-by-one
-                for (let i = 0; i < filesList.length; i++) {
-                    const file = filesList[i];
-                    const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-                    const uniqueFileName = emailPrefix + "_" + Date.now() + "_" + safeFileName;
-
-                    const { error: storageError } = await supabaseClient
-                        .storage
-                        .from('user_files')
-                        .upload(uniqueFileName, file, {
-                            cacheControl: '3600',
-                            upsert: true
-                        });
-
-                    if (storageError) throw new Error("Storage Core Failed: " + storageError.message);
-
-                    // Grab the clean permanent public link URL asset
-                    const { data: urlData } = supabaseClient
-                        .storage
-                        .from('user_files')
-                        .getPublicUrl(uniqueFileName);
-
-                    publicUrls.push(urlData.publicUrl);
-                }
-
-                alert("Step 2: Files uploaded successfully! Now writing to table columns...");
-
-                // 2. Insert rows directly matching your empty pristine table schema database layout
-                const { error: tableError } = await supabaseClient
-                    .from('user_leads')
-                    .insert([
-                        { name: name, email: email, file_url: publicUrls.join(" | ") }
-                    ]);
-
-                if (tableError) throw new Error("Table Write Failed: " + tableError.message);
-
-                alert("🎉 SUCCESS! Everything has been safely saved and organized!");
-                document.getElementById('leadForm').reset();
-
-            } catch (err) {
-                alert("❌ Action Halted: " + err.message);
-            } finally {
-                btn.innerText = "Submit Data";
-                btn.disabled = false;
-            }
-        });
-    </script>
+    async function signIn(email, password) {
+      const { data, error } = await _supabase.auth.signInWithPassword({ email, password });
+      if (error) console.error("Sign in error:", error.message);
+      else console.log("Logged in user:", data.user);
+    }
+  </script>
 </body>
 </html>
