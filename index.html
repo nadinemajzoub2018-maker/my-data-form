@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clean Multi-Upload Form</title>
+    <title>Clean Multi-Upload Form with Folders</title>
     <style>
         body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f4f9; margin: 0; }
         form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 320px; display: flex; flex-direction: column; }
@@ -32,7 +32,7 @@
 
     <script>
         // === PASTE YOUR CREDENTIALS BELOW ===
-        const SUPABASE_URL = "https://brldoaeffbajoitxohej.supabase.co";
+        const SUPABASE_URL = "https://supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
@@ -49,19 +49,23 @@
             const filesList = fileInput.files;
 
             const cleanUrl = SUPABASE_URL.replace(/\/$/, ""); 
-            const emailPrefix = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            alert("Connection Test: Form submission initiated successfully!");
+            // Clean up the email to make it a perfect folder name
+            const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            
+            alert("Folder Connection: Creating folder for " + folderName);
 
             try {
                 const publicUrls = [];
 
-                // 1. Upload files directly using native fetch streams
+                // 1. Upload files directly using native fetch streams into a dedicated subfolder path
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-                    const uniqueFileName = emailPrefix + "_" + Date.now() + "_" + safeFileName;
-                    const storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + uniqueFileName;
+                    const uniqueFileName = Date.now() + "_" + safeFileName;
+                    
+                    // FIX: Placing folderName + "/" right here instructs Supabase to build a virtual subfolder dynamically!
+                    const storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
 
                     const fileBlob = new Blob([file], { type: file.type });
 
@@ -77,13 +81,14 @@
                     });
 
                     if (!storageResponse.ok) {
-                        throw new Error("File Upload failed on storage server.");
+                        throw new Error("Folder generation upload failed.");
                     }
 
-                    publicUrls.push(cleanUrl + "/storage/v1/object/public/user_files/" + uniqueFileName);
+                    // Save the public link reference that includes the new folder path structure
+                    publicUrls.push(cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Files uploaded! Now inserting your row data...");
+                alert("Files saved inside folder! Finalizing database row...");
 
                 // 2. Save text values inside an array matching your PostgREST schema layout
                 const tableEndpoint = cleanUrl + "/rest/v1/user_leads";
@@ -105,7 +110,7 @@
                 });
 
                 if (tableResponse.ok) {
-                    alert("🎉 SUCCESS! Your records have been completely saved!");
+                    alert("🎉 SUCCESS! Everything has been safely saved in subfolders!");
                     document.getElementById('leadForm').reset();
                 } else {
                     const responseText = await tableResponse.text();
