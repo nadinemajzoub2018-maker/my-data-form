@@ -11,7 +11,8 @@
         label { font-size: 13px; color: #333; margin-bottom: 5px; font-weight: bold; display: block; }
         input, select { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: calc(100% - 22px); }
         select { width: 100%; }
-        .file-box { margin-bottom: 15px; padding: 5px 0; }
+        .file-box { margin-bottom: 5px; padding: 5px 0; }
+        .file-hint { font-size: 11px; color: #666; margin-bottom: 15px; font-style: italic; }
         button { background: #24292e; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; margin-top: 10px; }
         button:hover { background: #333; }
         button:disabled { background: #ccc; cursor: not-allowed; }
@@ -38,6 +39,7 @@
         
         <label for="userfiles">Choose Files to Attach (PDF, JPG, PNG):</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
+        <div class="file-hint">Note: Please compress large images before uploading. Max 5MB per file.</div>
         
         <button type="submit" id="submitBtn">Submit Application</button>
     </form>
@@ -71,12 +73,23 @@
             const cleanUrl = SUPABASE_URL.replace(/\/$/, ""); 
             const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            alert("Application Status: Creating attachment directory for folder: " + folderName);
+            // Front-End Size Check: Prevent browser crashes due to massive files
+            const MAX_SIZE = 5 * 1024 * 1024; // 5 Megabytes
+            for(let i=0; i<filesList.length; i++) {
+                if(filesList[i].size > MAX_SIZE) {
+                    alert("❌ File Too Massive: '" + filesList[i].name + "' is larger than 5MB. Please compress your document or image before uploading!");
+                    btn.innerText = "Submit Application";
+                    btn.disabled = false;
+                    return;
+                }
+            }
+
+            alert("Uploading files into user folder path: " + folderName);
 
             try {
                 const publicUrls = [];
 
-                // 1. Upload attachments using direct fetch streams into the email user folder path
+                // 1. Stream the file binary payload natively into your storage container
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
@@ -98,15 +111,16 @@
                     });
 
                     if (!storageResponse.ok) {
-                        throw new Error("Attachment transfer failed.");
+                        const errTxt = await storageResponse.text();
+                        throw new Error("Storage Upload Blocked: " + errTxt);
                     }
 
                     publicUrls.push(cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Attachments saved successfully! Finalizing intake database metrics...");
+                alert("Files uploaded successfully! Saving database text data...");
 
-                // 2. Map data row parameters matching your expanded database columns
+                // 2. PostgREST database row configuration
                 const tableEndpoint = cleanUrl + "/rest/v1/user_leads";
                 const databasePayload = [{
                     first_name: firstName,
@@ -141,7 +155,12 @@
                 }
 
             } catch (err) {
-                alert("Stopped: " + err.message);
+                // Better troubleshooting mapping for network blockades
+                if(err.message === "Failed to fetch") {
+                    alert("❌ Network Connection Drop: The browser was unable to push this upload data payload. This means your file uploads are too large for your internet network speed, or a tracking blocker extension is disrupting the direct connection. Please try with smaller or compressed files!");
+                } else {
+                    alert("Stopped: " + err.message);
+                }
             } finally {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
