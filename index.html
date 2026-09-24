@@ -55,27 +55,17 @@
             btn.innerText = "Processing...";
             btn.disabled = true;
 
-            const firstName = document.getElementById('firstName').value;
-            const fatherName = document.getElementById('fatherName').value;
-            const lastName = document.getElementById('lastName').value;
-            const dob = document.getElementById('dob').value;
-            const pob = document.getElementById('pob').value;
-            const nationality = document.getElementById('nationality').value;
-            const email = document.getElementById('useremail').value;
-            const mobile = document.getElementById('mobile').value;
-            const address = document.getElementById('address').value;
-            const major = document.getElementById('major').value;
-            
-            const fileInput = document.getElementById('userfiles');
-            const filesList = fileInput.files;
-
-            const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-            
-            alert("Upload Initiated: Commencing binary streaming...");
-
             try {
+                const email = document.getElementById('useremail').value;
+                const fileInput = document.getElementById('userfiles');
+                const filesList = fileInput.files;
+
+                const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+                alert("Processing submission profile package...");
+
                 const publicUrls = [];
 
+                // 1. Upload files securely via PUT network operations
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
@@ -95,7 +85,7 @@
                     });
 
                     if (!storageResponse.ok) {
-                        throw new Error("File upload failed on item: " + file.name);
+                        throw new Error("File submission failed on storage segment.");
                     }
 
                     publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
@@ -103,18 +93,19 @@
 
                 alert("Files saved into your email subfolder! Creating database entry row...");
 
+                // 2. Insert records matching your Supabase table fields exactly
                 const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
                 const databasePayload = [{
-                    first_name: firstName,
-                    father_name: fatherName,
-                    last_name: lastName,
-                    dob: dob,
-                    pob: pob,
-                    nationality: nationality,
+                    first_name: document.getElementById('firstName').value,
+                    father_name: document.getElementById('fatherName').value,
+                    last_name: document.getElementById('lastName').value,
+                    dob: document.getElementById('dob').value,
+                    pob: document.getElementById('pob').value,
+                    nationality: document.getElementById('nationality').value,
                     email: email,
-                    mobile: mobile,
-                    address: address,
-                    major: major,
+                    mobile: document.getElementById('mobile').value,
+                    address: document.getElementById('address').value,
+                    major: document.getElementById('major').value,
                     file_url: publicUrls.join(" | ")
                 }];
 
@@ -134,11 +125,11 @@
                     document.getElementById('leadForm').reset();
                 } else {
                     const responseText = await tableResponse.text();
-                    alert("Database row error: " + responseText);
+                    alert("Database schema mismatch error: " + responseText);
                 }
 
             } catch (err) {
-                alert("Stopped: " + err.message);
+                alert("Submission Message: " + err.message);
             } finally {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
@@ -147,3 +138,4 @@
     </script>
 </body>
 </html>
+
