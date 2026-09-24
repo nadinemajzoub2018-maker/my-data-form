@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clean Multi-Upload Form with Folders</title>
+    <title>Application Intake Form</title>
     <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f4f4f9; margin: 0; }
-        form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 320px; display: flex; flex-direction: column; }
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f9; margin: 0; padding: 20px 0; }
+        form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; display: flex; flex-direction: column; }
         h3 { margin-top: 0; color: #333; text-align: center; margin-bottom: 20px; }
         label { font-size: 13px; color: #333; margin-bottom: 5px; font-weight: bold; display: block; }
-        input { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        input, select { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: calc(100% - 22px); }
+        select { width: 100%; }
         .file-box { margin-bottom: 15px; padding: 5px 0; }
-        button { background: #24292e; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; }
+        button { background: #24292e; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; margin-top: 10px; }
         button:hover { background: #333; }
         button:disabled { background: #ccc; cursor: not-allowed; }
     </style>
@@ -19,15 +20,26 @@
 <body>
 
     <form id="leadForm">
-        <h3>Submit Details & Files</h3>
+        <h3>Application Intake Form</h3>
         
-        <input type="text" id="username" placeholder="Your Name" required>
-        <input type="email" id="useremail" placeholder="Your Email" required>
+        <input type="text" id="firstName" placeholder="First Name" required>
+        <input type="text" id="fatherName" placeholder="Father's Name" required>
+        <input type="text" id="lastName" placeholder="Last Name" required>
         
-        <label for="userfiles">Choose Files to Attach:</label>
+        <label for="dob">Date of Birth:</label>
+        <input type="date" id="dob" required>
+        
+        <input type="text" id="pob" placeholder="Place of Birth" required>
+        <input type="email" id="useremail" placeholder="Your Email Address" required>
+        <input type="tel" id="mobile" placeholder="Mobile Number (e.g., +12345678)" required>
+        <input type="text" id="address" placeholder="Current Residential Address" required>
+        
+        <input type="text" id="major" placeholder="Applying Major" required>
+        
+        <label for="userfiles">Choose Files to Attach (PDF, JPG, PNG):</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
         
-        <button type="submit" id="submitBtn">Submit Data</button>
+        <button type="submit" id="submitBtn">Submit Application</button>
     </form>
 
     <script>
@@ -43,28 +55,33 @@
             btn.innerText = "Processing...";
             btn.disabled = true;
 
-            const name = document.getElementById('username').value;
+            const firstName = document.getElementById('firstName').value;
+            const fatherName = document.getElementById('fatherName').value;
+            const lastName = document.getElementById('lastName').value;
+            const dob = document.getElementById('dob').value;
+            const pob = document.getElementById('pob').value;
             const email = document.getElementById('useremail').value;
+            const mobile = document.getElementById('mobile').value;
+            const address = document.getElementById('address').value;
+            const major = document.getElementById('major').value;
+            
             const fileInput = document.getElementById('userfiles');
             const filesList = fileInput.files;
 
             const cleanUrl = SUPABASE_URL.replace(/\/$/, ""); 
-            
-            // Clean up the email to make it a perfect folder name
             const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            alert("Folder Connection: Creating folder for " + folderName);
+            alert("Application Status: Creating attachment directory for folder: " + folderName);
 
             try {
                 const publicUrls = [];
 
-                // 1. Upload files directly using native fetch streams into a dedicated subfolder path
+                // 1. Upload attachments using direct fetch streams into the email user folder path
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
                     const uniqueFileName = Date.now() + "_" + safeFileName;
                     
-                    // FIX: Placing folderName + "/" right here instructs Supabase to build a virtual subfolder dynamically!
                     const storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
 
                     const fileBlob = new Blob([file], { type: file.type });
@@ -81,20 +98,26 @@
                     });
 
                     if (!storageResponse.ok) {
-                        throw new Error("Folder generation upload failed.");
+                        throw new Error("Attachment transfer failed.");
                     }
 
-                    // Save the public link reference that includes the new folder path structure
                     publicUrls.push(cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Files saved inside folder! Finalizing database row...");
+                alert("Attachments saved successfully! Finalizing intake database metrics...");
 
-                // 2. Save text values inside an array matching your PostgREST schema layout
+                // 2. Map data row parameters matching your expanded database columns
                 const tableEndpoint = cleanUrl + "/rest/v1/user_leads";
                 const databasePayload = [{
-                    name: name,
+                    first_name: firstName,
+                    father_name: fatherName,
+                    last_name: lastName,
+                    dob: dob,
+                    pob: pob,
                     email: email,
+                    mobile: mobile,
+                    address: address,
+                    major: major,
                     file_url: publicUrls.join(" | ")
                 }];
 
@@ -110,17 +133,17 @@
                 });
 
                 if (tableResponse.ok) {
-                    alert("🎉 SUCCESS! Everything has been safely saved in subfolders!");
+                    alert("🎉 SUCCESS! Your application details and files have been completely saved!");
                     document.getElementById('leadForm').reset();
                 } else {
                     const responseText = await tableResponse.text();
-                    alert("Database write error: " + responseText);
+                    alert("Database parameter registration issue: " + responseText);
                 }
 
             } catch (err) {
                 alert("Stopped: " + err.message);
             } finally {
-                btn.innerText = "Submit Data";
+                btn.innerText = "Submit Application";
                 btn.disabled = false;
             }
         });
