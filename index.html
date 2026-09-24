@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Application Intake Form</title>
+    <!-- Load the official Supabase bundle globally -->
+    <script src="https://unpkg.com"></script>
     <style>
         body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f9; margin: 0; padding: 20px 0; }
         form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; display: flex; flex-direction: column; }
@@ -18,23 +20,23 @@
 </head>
 <body>
 
-    <form id="leadForm" onsubmit="handleFormSubmit(event)">
+    <form id="leadForm">
         <h3>Application Intake Form</h3>
         
-        <input type="text" id="firstName" placeholder="First Name" required>
-        <input type="text" id="fatherName" placeholder="Father's Name" required>
-        <input type="text" id="lastName" placeholder="Last Name" required>
+        <!-- The name attributes here map perfectly to your Supabase table columns -->
+        <input type="text" name="first_name" placeholder="First Name" required>
+        <input type="text" name="father_name" placeholder="Father's Name" required>
+        <input type="text" name="last_name" placeholder="Last Name" required>
         
         <label for="dob">Date of Birth:</label>
-        <input type="date" id="dob" required>
+        <input type="date" name="dob" required>
         
-        <input type="text" id="pob" placeholder="Place of Birth" required>
-        <input type="text" id="nationality" placeholder="Nationality" required>
-        <input type="email" id="useremail" placeholder="Your Email Address" required>
-        <input type="tel" id="mobile" placeholder="Mobile Number" required>
-        <input type="text" id="address" placeholder="Current Residential Address" required>
-        
-        <input type="text" id="major" placeholder="Applying Major" required>
+        <input type="text" name="pob" placeholder="Place of Birth" required>
+        <input type="text" name="nationality" placeholder="Nationality" required>
+        <input type="email" name="email" id="useremail" placeholder="Your Email Address" required>
+        <input type="tel" name="mobile" placeholder="Mobile Number" required>
+        <input type="text" name="address" placeholder="Current Residential Address" required>
+        <input type="text" name="major" placeholder="Applying Major" required>
         
         <label for="userfiles">Choose Files to Attach:</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
@@ -48,94 +50,75 @@
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
-        async function handleFormSubmit(event) {
-            event.preventDefault();
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        document.getElementById('leadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
 
             const btn = document.getElementById('submitBtn');
             btn.innerText = "Processing...";
             btn.disabled = true;
 
+            const email = document.getElementById('useremail').value;
+            const fileInput = document.getElementById('userfiles');
+            const filesList = fileInput.files;
+
+            const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            alert("Upload Initiated: Transmitting application bundle...");
+
             try {
-                const email = document.getElementById('useremail').value;
-                const fileInput = document.getElementById('userfiles');
-                const filesList = fileInput.files;
-
-                const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-                alert("Processing submission profile package...");
-
                 const publicUrls = [];
 
-                // 1. Upload files securely via PUT network operations
+                // 1. Upload files securely via PUT network operations into user subfolders
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
                     const uniqueFileName = Date.now() + "_" + safeFileName;
-                    
-                    const storageEndpoint = SUPABASE_URL + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
-                    const fileBlob = new Blob([file], { type: file.type });
 
-                    const storageResponse = await fetch(storageEndpoint, {
-                        method: "PUT",
-                        headers: {
-                            "apikey": SUPABASE_ANON_KEY,
-                            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                            "Content-Type": file.type
-                        },
-                        body: fileBlob
-                    });
+                    const { error: storageError } = await supabaseClient
+                        .storage
+                        .from('user_files')
+                        .upload(folderName + "/" + uniqueFileName, file, {
+                            cacheControl: '3600',
+                            upsert: true
+                        });
 
-                    if (!storageResponse.ok) {
-                        throw new Error("File submission failed on storage segment.");
-                    }
+                    if (storageError) throw new Error("Storage Upload Error: " + storageError.message);
 
-                    publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
+                    const { data: urlData } = supabaseClient
+                        .storage
+                        .from('user_files')
+                        .getPublicUrl(folderName + "/" + uniqueFileName);
+
+                    publicUrls.push(urlData.publicUrl);
                 }
 
-                alert("Files saved into your email subfolder! Creating database entry row...");
+                alert("Files saved into folders! Syncing text fields to table grid...");
 
-                // 2. Insert records matching your Supabase table fields exactly
-                const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
-                const databasePayload = [{
-                    first_name: document.getElementById('firstName').value,
-                    father_name: document.getElementById('fatherName').value,
-                    last_name: document.getElementById('lastName').value,
-                    dob: document.getElementById('dob').value,
-                    pob: document.getElementById('pob').value,
-                    nationality: document.getElementById('nationality').value,
-                    email: email,
-                    mobile: document.getElementById('mobile').value,
-                    address: document.getElementById('address').value,
-                    major: document.getElementById('major').value,
-                    file_url: publicUrls.join(" | ")
-                }];
+                // FIX: Collect form entries directly from input fields automatically.
+                // This completely bypasses line numbers and individual field code typos!
+                const formFields = new FormData(document.getElementById('leadForm'));
+                const rowPayload = Object.fromEntries(formFields.entries());
+                
+                // Append the combined file links string to the data package
+                rowPayload.file_url = publicUrls.join(" | ");
 
-                const tableResponse = await fetch(tableEndpoint, {
-                    method: "POST",
-                    headers: {
-                        "apikey": SUPABASE_ANON_KEY,
-                        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                        "Content-Type": "application/json",
-                        "Prefer": "return=minimal"
-                    },
-                    body: JSON.stringify(databasePayload)
-                });
+                const { error: tableError } = await supabaseClient
+                    .from('user_leads')
+                    .insert([rowPayload]);
 
-                if (tableResponse.ok) {
-                    alert("🎉 SUCCESS! Your application details have been completely saved!");
-                    document.getElementById('leadForm').reset();
-                } else {
-                    const responseText = await tableResponse.text();
-                    alert("Database schema mismatch error: " + responseText);
-                }
+                if (tableError) throw new Error("Database Table Error: " + tableError.message);
+
+                alert("🎉 SUCCESS! Your application details have been completely saved!");
+                document.getElementById('leadForm').reset();
 
             } catch (err) {
-                alert("Submission Message: " + err.message);
+                alert("Stopped: " + err.message);
             } finally {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
             }
-        }
+        });
     </script>
 </body>
 </html>
-
