@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Application Intake Form</title>
+    <!-- Load the official Supabase bundle globally to bypass network trackers -->
+    <script src="https://unpkg.com"></script>
     <style>
         body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f9; margin: 0; padding: 20px 0; }
         form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; display: flex; flex-direction: column; }
@@ -39,7 +41,7 @@
         <label for="userfiles">Choose Files to Attach:</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
         
-        <button type="button" id="submitBtn">Submit Application</button>
+        <button type="submit" id="submitBtn">Submit Application</button>
     </form>
 
     <script>
@@ -48,93 +50,94 @@
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
-        document.getElementById('submitBtn').addEventListener('click', function() {
-            var btn = document.getElementById('submitBtn');
-            var email = document.getElementById('useremail').value;
-            var fileInput = document.getElementById('userfiles');
-            var filesList = fileInput.files;
+        // Initialize utilizing the official library framework
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-            if (!document.getElementById('leadForm').checkValidity()) {
-                alert("Please fill out all required fields first.");
-                return;
-            }
+        document.getElementById('leadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
 
+            const btn = document.getElementById('submitBtn');
             btn.innerText = "Processing...";
             btn.disabled = true;
 
-            var cleanUrl = SUPABASE_URL.replace(/\/$/, "");
-            var folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            const firstName = document.getElementById('firstName').value;
+            const fatherName = document.getElementById('fatherName').value;
+            const lastName = document.getElementById('lastName').value;
+            const dob = document.getElementById('dob').value;
+            const pob = document.getElementById('pob').value;
+            const nationality = document.getElementById('nationality').value;
+            const email = document.getElementById('useremail').value;
+            const mobile = document.getElementById('mobile').value;
+            const address = document.getElementById('address').value;
+            const major = document.getElementById('major').value;
+            
+            const fileInput = document.getElementById('userfiles');
+            const filesList = fileInput.files;
 
-            alert("Diagnostics initiated. Uploading files into path: " + folderName);
+            const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            
+            alert("Upload Status: Initializing library upload engine...");
 
-            var publicUrls = [];
-            var uploadPromises = Array.from(filesList).map(function(file) {
-                var safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-                var uniqueFileName = Date.now() + "_" + safeFileName;
-                var storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
+            try {
+                const publicUrls = [];
 
-                return fetch(storageEndpoint, {
-                    method: "PUT",
-                    headers: {
-                        "apikey": SUPABASE_ANON_KEY,
-                        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                        "Content-Type": file.type
-                    },
-                    body: file
-                })
-                .then(function(res) {
-                    if (!res.ok) throw new Error("Upload aborted.");
-                    return cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName;
-                });
-            });
+                // 1. Upload files into your public storage bucket email folders
+                for (let i = 0; i < filesList.length; i++) {
+                    const file = filesList[i];
+                    const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+                    const uniqueFileName = Date.now() + "_" + safeFileName;
 
-            Promise.all(uploadPromises)
-            .then(function(urls) {
-                publicUrls = urls;
-                alert("Files uploaded! Pushing rows into data columns...");
+                    // Upload securely via the official library wrapper parameters
+                    const { error: storageError } = await supabaseClient
+                        .storage
+                        .from('user_files')
+                        .upload(folderName + "/" + uniqueFileName, file, {
+                            cacheControl: '3600',
+                            upsert: true
+                        });
 
-                var databasePayload = [{
-                    first_name: document.getElementById('firstName').value,
-                    father_name: document.getElementById('fatherName').value,
-                    last_name: document.getElementById('lastName').value,
-                    dob: document.getElementById('dob').value,
-                    pob: document.getElementById('pob').value,
-                    nationality: document.getElementById('nationality').value,
-                    email: email,
-                    mobile: document.getElementById('mobile').value,
-                    address: document.getElementById('address').value,
-                    major: document.getElementById('major').value,
-                    file_url: publicUrls.join(" | ")
-                }];
+                    if (storageError) throw new Error("Storage Upload Error: " + storageError.message);
 
-                return fetch(cleanUrl + "/rest/v1/user_leads", {
-                    method: "POST",
-                    headers: {
-                        "apikey": SUPABASE_ANON_KEY,
-                        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                        "Content-Type": "application/json",
-                        "Prefer": "return=minimal"
-                    },
-                    body: JSON.stringify(databasePayload)
-                });
-            })
-            .then(function(tableRes) {
-                if (tableRes.ok) {
-                    alert("🎉 SUCCESS! Application completely saved!");
-                    document.getElementById('leadForm').reset();
-                } else {
-                    return tableRes.text().then(function(txt) {
-                        alert("Database configuration mismatch: " + txt);
-                    });
+                    const { data: urlData } = supabaseClient
+                        .storage
+                        .from('user_files')
+                        .getPublicUrl(folderName + "/" + uniqueFileName);
+
+                    publicUrls.push(urlData.publicUrl);
                 }
-            })
-            .catch(function(err) {
-                alert("Submission Message Error: " + err.message);
-            })
-            .finally(function() {
+
+                alert("Files saved into folders! Syncing text fields to table rows...");
+
+                // 2. Insert metrics directly into your database using the official library insertion layer
+                const { error: tableError } = await supabaseClient
+                    .from('user_leads')
+                    .insert([
+                        { 
+                            first_name: firstName,
+                            father_name: fatherName,
+                            last_name: lastName,
+                            dob: dob,
+                            pob: pob,
+                            nationality: nationality,
+                            email: email,
+                            mobile: mobile,
+                            address: address,
+                            major: major,
+                            file_url: publicUrls.join(" | ")
+                        }
+                    ]);
+
+                if (tableError) throw new Error("Database Table Error: " + tableError.message);
+
+                alert("🎉 SUCCESS! Your application details have been completely saved!");
+                document.getElementById('leadForm').reset();
+
+            } catch (err) {
+                alert("Stopped: " + err.message);
+            } finally {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
-            });
+            }
         });
     </script>
 </body>
