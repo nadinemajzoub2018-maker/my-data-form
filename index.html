@@ -18,7 +18,8 @@
 </head>
 <body>
 
-    <form id="leadForm">
+    <!-- Attached onsubmit directly to the form layer to stop native browser redirects immediately -->
+    <form id="leadForm" onsubmit="handleFormSubmit(event)">
         <h3>Application Intake Form</h3>
         
         <input type="text" id="firstName" placeholder="First Name" required>
@@ -43,12 +44,13 @@
 
     <script>
         // === PASTE YOUR CREDENTIALS BELOW ===
-        const SUPABASE_URL = "https://supabase.co";
+        const SUPABASE_URL = "https://brldoaeffbajoitxohej.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
-        document.getElementById('leadForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        async function handleFormSubmit(event) {
+            // HARD BLOCK: Instantly kills the browser reload sequence before any execution
+            event.preventDefault();
 
             const btn = document.getElementById('submitBtn');
             btn.innerText = "Processing...";
@@ -69,12 +71,12 @@
 
             const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            alert("Upload Status: Starting your attachment transmission...");
+            alert("Upload Process Initialized. Click OK to stream files.");
 
             try {
                 const publicUrls = [];
 
-                // 1. Upload files directly using clean blob streams
+                // 1. Upload files into structured user email subfolders
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
@@ -95,15 +97,15 @@
                     });
 
                     if (!storageResponse.ok) {
-                        throw new Error("File submission failed on storage step.");
+                        throw new Error("File upload sequence halted at index: " + i);
                     }
 
                     publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Files saved to storage bucket! Registering form data rows...");
+                alert("Files saved inside folder structure! Syncing data grid fields...");
 
-                // 2. Insert metrics matching your Supabase Table fields
+                // 2. Insert records matching your Supabase table fields exactly
                 const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
                 const databasePayload = [{
                     first_name: firstName,
@@ -130,11 +132,11 @@
                 });
 
                 if (tableResponse.ok) {
-                    alert("🎉 SUCCESS! Your application details have been completely saved!");
+                    alert("🎉 SUCCESS! Your application details have been completely saved in your email subfolder!");
                     document.getElementById('leadForm').reset();
                 } else {
                     const responseText = await tableResponse.text();
-                    alert("Database write error message: " + responseText);
+                    alert("Database schema mismatch: " + responseText);
                 }
 
             } catch (err) {
@@ -143,7 +145,8 @@
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
             }
-        });
+        }
     </script>
 </body>
 </html>
+
