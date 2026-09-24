@@ -18,7 +18,7 @@
 </head>
 <body>
 
-    <form id="leadForm" onsubmit="handleFormSubmit(event)">
+    <form id="leadForm">
         <h3>Application Intake Form</h3>
         
         <input type="text" id="firstName" placeholder="First Name" required>
@@ -39,7 +39,7 @@
         <label for="userfiles">Choose Files to Attach:</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
         
-        <button type="submit" id="submitBtn">Submit Application</button>
+        <button type="button" id="submitBtn">Submit Application</button>
     </form>
 
     <script>
@@ -48,51 +48,52 @@
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
-        async function handleFormSubmit(event) {
-            event.preventDefault();
+        document.getElementById('submitBtn').addEventListener('click', function() {
+            var btn = document.getElementById('submitBtn');
+            var email = document.getElementById('useremail').value;
+            var fileInput = document.getElementById('userfiles');
+            var filesList = fileInput.files;
 
-            const btn = document.getElementById('submitBtn');
+            if (!document.getElementById('leadForm').checkValidity()) {
+                alert("Please fill out all required fields first.");
+                return;
+            }
+
             btn.innerText = "Processing...";
             btn.disabled = true;
 
-            const email = document.getElementById('useremail').value;
-            const fileInput = document.getElementById('userfiles');
-            const filesList = fileInput.files;
-            const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-            
-            try {
-                const publicUrls = [];
+            var cleanUrl = SUPABASE_URL.replace(/\/$/, "");
+            var folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
 
-                // 1. Upload files securely via PUT native streams
-                for (let i = 0; i < filesList.length; i++) {
-                    const file = filesList[i];
-                    const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-                    const uniqueFileName = Date.now() + "_" + safeFileName;
-                    
-                    const storageEndpoint = SUPABASE_URL + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
-                    const fileBlob = new Blob([file], { type: file.type });
+            alert("Diagnostics initiated. Uploading files into path: " + folderName);
 
-                    const storageResponse = await fetch(storageEndpoint, {
-                        method: "PUT",
-                        headers: {
-                            "apikey": SUPABASE_ANON_KEY,
-                            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
-                            "Content-Type": file.type
-                        },
-                        body: fileBlob
-                    });
+            var publicUrls = [];
+            var uploadPromises = Array.from(filesList).map(function(file) {
+                var safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+                var uniqueFileName = Date.now() + "_" + safeFileName;
+                var storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
 
-                    if (!storageResponse.ok) {
-                        const errText = await storageResponse.text();
-                        throw new Error("File Upload Failed: " + errText);
-                    }
+                return fetch(storageEndpoint, {
+                    method: "PUT",
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+                        "Content-Type": file.type
+                    },
+                    body: file
+                })
+                .then(function(res) {
+                    if (!res.ok) throw new Error("Upload aborted.");
+                    return cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName;
+                });
+            });
 
-                    publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
-                }
+            Promise.all(uploadPromises)
+            .then(function(urls) {
+                publicUrls = urls;
+                alert("Files uploaded! Pushing rows into data columns...");
 
-                // 2. Insert rows using direct native PostgREST call to read any silent database errors out loud
-                const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
-                const databasePayload = [{
+                var databasePayload = [{
                     first_name: document.getElementById('firstName').value,
                     father_name: document.getElementById('fatherName').value,
                     last_name: document.getElementById('lastName').value,
@@ -106,34 +107,35 @@
                     file_url: publicUrls.join(" | ")
                 }];
 
-                const tableResponse = await fetch(tableEndpoint, {
+                return fetch(cleanUrl + "/rest/v1/user_leads", {
                     method: "POST",
                     headers: {
                         "apikey": SUPABASE_ANON_KEY,
                         "Authorization": "Bearer " + SUPABASE_ANON_KEY,
                         "Content-Type": "application/json",
-                        "Prefer": "return=representation" // Forces the server to send a true log back
+                        "Prefer": "return=minimal"
                     },
                     body: JSON.stringify(databasePayload)
                 });
-
-                const responseText = await tableResponse.text();
-
-                if (tableResponse.ok) {
+            })
+            .then(function(tableRes) {
+                if (tableRes.ok) {
                     alert("🎉 SUCCESS! Application completely saved!");
                     document.getElementById('leadForm').reset();
                 } else {
-                    // This will tell us the exact hidden column spelling mistake or RLS block text!
-                    alert("Database Stopped Us: " + responseText);
+                    return tableRes.text().then(function(txt) {
+                        alert("Database configuration mismatch: " + txt);
+                    });
                 }
-
-            } catch (err) {
-                alert("Diagnostic Message: " + err.message);
-            } finally {
+            })
+            .catch(function(err) {
+                alert("Submission Message Error: " + err.message);
+            })
+            .finally(function() {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
-            }
-        }
+            });
+        });
     </script>
 </body>
 </html>
