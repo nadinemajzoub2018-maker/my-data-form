@@ -9,10 +9,8 @@
         form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; display: flex; flex-direction: column; }
         h3 { margin-top: 0; color: #333; text-align: center; margin-bottom: 20px; }
         label { font-size: 13px; color: #333; margin-bottom: 5px; font-weight: bold; display: block; }
-        input, select { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: calc(100% - 22px); }
-        select { width: 100%; }
-        .file-box { margin-bottom: 5px; padding: 5px 0; }
-        .file-hint { font-size: 11px; color: #666; margin-bottom: 15px; font-style: italic; }
+        input { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: calc(100% - 22px); }
+        .file-box { margin-bottom: 15px; padding: 5px 0; }
         button { background: #24292e; color: white; border: none; padding: 12px; cursor: pointer; font-weight: bold; border-radius: 4px; margin-top: 10px; }
         button:hover { background: #333; }
         button:disabled { background: #ccc; cursor: not-allowed; }
@@ -32,14 +30,13 @@
         
         <input type="text" id="pob" placeholder="Place of Birth" required>
         <input type="email" id="useremail" placeholder="Your Email Address" required>
-        <input type="tel" id="mobile" placeholder="Mobile Number (e.g., +12345678)" required>
+        <input type="tel" id="mobile" placeholder="Mobile Number" required>
         <input type="text" id="address" placeholder="Current Residential Address" required>
         
         <input type="text" id="major" placeholder="Applying Major" required>
         
-        <label for="userfiles">Choose Files to Attach (PDF, JPG, PNG):</label>
+        <label for="userfiles">Choose Files to Attach:</label>
         <input type="file" id="userfiles" class="file-box" accept=".pdf, .jpg, .jpeg, .png" multiple required>
-        <div class="file-hint">Note: Please compress large images before uploading. Max 5MB per file.</div>
         
         <button type="submit" id="submitBtn">Submit Application</button>
     </form>
@@ -70,33 +67,20 @@
             const fileInput = document.getElementById('userfiles');
             const filesList = fileInput.files;
 
-            const cleanUrl = SUPABASE_URL.replace(/\/$/, ""); 
             const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            // Front-End Size Check: Prevent browser crashes due to massive files
-            const MAX_SIZE = 5 * 1024 * 1024; // 5 Megabytes
-            for(let i=0; i<filesList.length; i++) {
-                if(filesList[i].size > MAX_SIZE) {
-                    alert("❌ File Too Massive: '" + filesList[i].name + "' is larger than 5MB. Please compress your document or image before uploading!");
-                    btn.innerText = "Submit Application";
-                    btn.disabled = false;
-                    return;
-                }
-            }
-
-            alert("Uploading files into user folder path: " + folderName);
+            alert("Upload Status: Starting your attachment transmission...");
 
             try {
                 const publicUrls = [];
 
-                // 1. Stream the file binary payload natively into your storage container
+                // 1. Upload files directly using clean blob streams
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
                     const uniqueFileName = Date.now() + "_" + safeFileName;
                     
-                    const storageEndpoint = cleanUrl + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
-
+                    const storageEndpoint = SUPABASE_URL + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
                     const fileBlob = new Blob([file], { type: file.type });
 
                     const storageResponse = await fetch(storageEndpoint, {
@@ -111,17 +95,16 @@
                     });
 
                     if (!storageResponse.ok) {
-                        const errTxt = await storageResponse.text();
-                        throw new Error("Storage Upload Blocked: " + errTxt);
+                        throw new Error("File submission failed on storage step.");
                     }
 
-                    publicUrls.push(cleanUrl + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
+                    publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Files uploaded successfully! Saving database text data...");
+                alert("Files saved to storage bucket! Registering form data rows...");
 
-                // 2. PostgREST database row configuration
-                const tableEndpoint = cleanUrl + "/rest/v1/user_leads";
+                // 2. Insert metrics matching your Supabase Table fields
+                const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
                 const databasePayload = [{
                     first_name: firstName,
                     father_name: fatherName,
@@ -147,20 +130,15 @@
                 });
 
                 if (tableResponse.ok) {
-                    alert("🎉 SUCCESS! Your application details and files have been completely saved!");
+                    alert("🎉 SUCCESS! Your application details have been completely saved!");
                     document.getElementById('leadForm').reset();
                 } else {
                     const responseText = await tableResponse.text();
-                    alert("Database parameter registration issue: " + responseText);
+                    alert("Database write error message: " + responseText);
                 }
 
             } catch (err) {
-                // Better troubleshooting mapping for network blockades
-                if(err.message === "Failed to fetch") {
-                    alert("❌ Network Connection Drop: The browser was unable to push this upload data payload. This means your file uploads are too large for your internet network speed, or a tracking blocker extension is disrupting the direct connection. Please try with smaller or compressed files!");
-                } else {
-                    alert("Stopped: " + err.message);
-                }
+                alert("Stopped: " + err.message);
             } finally {
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
