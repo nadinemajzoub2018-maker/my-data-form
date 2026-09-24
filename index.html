@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Application Intake Form</title>
-    <!-- Load the official Supabase bundle globally to bypass network trackers -->
-    <script src="https://unpkg.com"></script>
     <style>
         body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f4f4f9; margin: 0; padding: 20px 0; }
         form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 350px; display: flex; flex-direction: column; }
@@ -20,7 +18,7 @@
 </head>
 <body>
 
-    <form id="leadForm">
+    <form id="leadForm" onsubmit="handleFormSubmit(event)">
         <h3>Application Intake Form</h3>
         
         <input type="text" id="firstName" placeholder="First Name" required>
@@ -50,11 +48,8 @@
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
-        // Initialize utilizing the official library framework
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        document.getElementById('leadForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        async function handleFormSubmit(event) {
+            event.preventDefault();
 
             const btn = document.getElementById('submitBtn');
             btn.innerText = "Processing...";
@@ -76,61 +71,73 @@
 
             const folderName = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
             
-            alert("Upload Status: Initializing library upload engine...");
+            alert("Upload Initiated: Commencing binary streaming...");
 
             try {
                 const publicUrls = [];
 
-                // 1. Upload files into your public storage bucket email folders
                 for (let i = 0; i < filesList.length; i++) {
                     const file = filesList[i];
                     const safeFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
                     const uniqueFileName = Date.now() + "_" + safeFileName;
+                    
+                    const storageEndpoint = SUPABASE_URL + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
+                    const fileBlob = new Blob([file], { type: file.type });
 
-                    // Upload securely via the official library wrapper parameters
-                    const { error: storageError } = await supabaseClient
-                        .storage
-                        .from('user_files')
-                        .upload(folderName + "/" + uniqueFileName, file, {
-                            cacheControl: '3600',
-                            upsert: true
-                        });
+                    const storageResponse = await fetch(storageEndpoint, {
+                        method: "PUT",
+                        headers: {
+                            "apikey": SUPABASE_ANON_KEY,
+                            "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+                            "Content-Type": file.type
+                        },
+                        body: fileBlob
+                    });
 
-                    if (storageError) throw new Error("Storage Upload Error: " + storageError.message);
+                    if (!storageResponse.ok) {
+                        throw new Error("File upload failed on item: " + file.name);
+                    }
 
-                    const { data: urlData } = supabaseClient
-                        .storage
-                        .from('user_files')
-                        .getPublicUrl(folderName + "/" + uniqueFileName);
-
-                    publicUrls.push(urlData.publicUrl);
+                    publicUrls.push(SUPABASE_URL + "/storage/v1/object/public/user_files/" + folderName + "/" + uniqueFileName);
                 }
 
-                alert("Files saved into folders! Syncing text fields to table rows...");
+                alert("Files saved into your email subfolder! Creating database entry row...");
 
-                // 2. Insert metrics directly into your database using the official library insertion layer
-                const { error: tableError } = await supabaseClient
-                    .from('user_leads')
-                    .insert([
-                        { 
-                            first_name: firstName,
-                            father_name: fatherName,
-                            last_name: lastName,
-                            dob: dob,
-                            pob: pob,
-                            nationality: nationality,
-                            email: email,
-                            mobile: mobile,
-                            address: address,
-                            major: major,
-                            file_url: publicUrls.join(" | ")
-                        }
-                    ]);
+                const tableEndpoint = SUPABASE_URL + "/rest/v1/user_leads";
+                const databasePayload = [{
+                    first_name: firstName,
+                    father_name: fatherName,
+                    last_name: lastName,
+                    dob: dob,
+                    pob: pob,
+                    nationality: nationality,
+                    email: email,
+                    mobile: mobile,
+                    address: address,
+                    major: major,
+                    file_url: publicUrls.join(" | ")
+                }];
 
-                if (tableError) throw new Error("Database Table Error: " + tableError.message);
+                const tableResponse = await fetch(tableEndpoint, {
+                    method: "POST",
+                    headers: {
+                        "apikey": SUPABASE_ANON_KEY,
+                        "Authorization": "Bearer " + SUPABASE_ANON_KEY,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal",
+                        // FORCE ROUTING FEATURE: Instructs the PostgREST server API to save text records right into your visual public dashboard grid view
+                        "Content-Profile": "public"
+                    },
+                    body: JSON.stringify(databasePayload)
+                });
 
-                alert("🎉 SUCCESS! Your application details have been completely saved!");
-                document.getElementById('leadForm').reset();
+                if (tableResponse.ok) {
+                    alert("🎉 SUCCESS! Your application details have been completely saved!");
+                    document.getElementById('leadForm').reset();
+                } else {
+                    const responseText = await tableResponse.text();
+                    alert("Database row error: " + responseText);
+                }
 
             } catch (err) {
                 alert("Stopped: " + err.message);
@@ -138,7 +145,8 @@
                 btn.innerText = "Submit Application";
                 btn.disabled = false;
             }
-        });
+        }
     </script>
 </body>
 </html>
+
