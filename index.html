@@ -29,6 +29,7 @@
         <input type="date" id="dob" required>
         
         <input type="text" id="pob" placeholder="Place of Birth" required>
+        <input type="text" id="nationality" placeholder="Nationality" required>
         <input type="email" id="useremail" placeholder="Your Email Address" required>
         <input type="tel" id="mobile" placeholder="Mobile Number" required>
         <input type="text" id="address" placeholder="Current Residential Address" required>
@@ -43,7 +44,7 @@
 
     <script>
         // === PASTE YOUR CREDENTIALS BELOW ===
-        const SUPABASE_URL = "https://brldoaeffbajoitxohej.supabase.co";
+        const SUPABASE_URL = "https://supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_0DWJebA2Vn3HIyGf7iSxgg_uZAfbfTR";
         // ===================================
 
@@ -59,6 +60,7 @@
             const lastName = document.getElementById('lastName').value;
             const dob = document.getElementById('dob').value;
             const pob = document.getElementById('pob').value;
+            const nationality = document.getElementById('nationality').value;
             const email = document.getElementById('useremail').value;
             const mobile = document.getElementById('mobile').value;
             const address = document.getElementById('address').value;
@@ -82,7 +84,6 @@
                     const storageEndpoint = SUPABASE_URL + "/storage/v1/object/user_files/" + folderName + "/" + uniqueFileName;
                     const fileBlob = new Blob([file], { type: file.type });
 
-                    // FIX: Using PUT bypasses the strict browser CORS preflight blocks completely!
                     const storageResponse = await fetch(storageEndpoint, {
                         method: "PUT",
                         headers: {
@@ -109,6 +110,7 @@
                     last_name: lastName,
                     dob: dob,
                     pob: pob,
+                    nationality: nationality,
                     email: email,
                     mobile: mobile,
                     address: address,
@@ -145,4 +147,3 @@
     </script>
 </body>
 </html>
-
